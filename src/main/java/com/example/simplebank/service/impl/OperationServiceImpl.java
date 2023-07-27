@@ -1,9 +1,11 @@
 package com.example.simplebank.service.impl;
 
 import com.example.simplebank.model.Account;
+import com.example.simplebank.model.OperationDesc;
 import com.example.simplebank.model.OperationDetails;
 import com.example.simplebank.model.OperationTypes;
 import com.example.simplebank.service.AccountService;
+import com.example.simplebank.service.HistoryService;
 import com.example.simplebank.service.OperationService;
 import com.example.simplebank.service.ValidationService;
 import lombok.AllArgsConstructor;
@@ -12,6 +14,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
 import javax.transaction.Transactional;
+import java.time.LocalDateTime;
 
 @Service
 @AllArgsConstructor
@@ -20,6 +23,8 @@ public class OperationServiceImpl implements OperationService {
     private AccountService accountService;
 
     private ValidationService validationService;
+
+    private HistoryService historyService;
 
     @Transactional
     @Override
@@ -35,7 +40,7 @@ public class OperationServiceImpl implements OperationService {
                 return transferMoney(operationDetails);
 
             default:
-                throw new IllegalArgumentException("Operation type '" + operationType + "' not supported");
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Operation type '" + operationType + "' not supported");
         }
     }
 
@@ -44,6 +49,7 @@ public class OperationServiceImpl implements OperationService {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Incorrect pin code. Please try again.");
         }
         accountService.addMoney(operationDetails.getInitiatorAccountId(), operationDetails.getValue());
+        loggingOperationHistory(operationDetails, OperationTypes.ADD.name());
         return ResponseEntity.status(HttpStatus.OK).body("Success: money added.");
     }
 
@@ -55,6 +61,7 @@ public class OperationServiceImpl implements OperationService {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Insufficient balance.");
         }
         accountService.withdrawMoney(operationDetails.getInitiatorAccountId(), operationDetails.getValue());
+        loggingOperationHistory(operationDetails, OperationTypes.WITHDRAW.name());
         return ResponseEntity.status(HttpStatus.OK).body("Success: withdraw money.");
     }
 
@@ -73,7 +80,24 @@ public class OperationServiceImpl implements OperationService {
         }
         accountService.addMoney(accountRecipient.getId(), operationDetails.getValue());
         accountService.withdrawMoney(accountInitiator.getId(), operationDetails.getValue());
+        loggingOperationHistory(operationDetails, OperationTypes.TRANSFER.name());
         return ResponseEntity.status(HttpStatus.OK).body("Success: transfer money.");
+    }
+
+    private void loggingOperationHistory(OperationDetails operationDetails, String operationType) {
+        Account initiator = accountService.findAccountById(operationDetails.getInitiatorAccountId());
+        Account recipient = accountService.findAccountById(operationDetails.getRecipientAccountId());
+        OperationDesc operationDesc = new OperationDesc();
+        operationDesc.setLocalDateTime(LocalDateTime.now());
+        operationDesc.setInitiatorAccountId(operationDetails.getInitiatorAccountId());
+        operationDesc.setRecipientAccountId(operationDetails.getRecipientAccountId());
+        operationDesc.setOperationType(operationType);
+        operationDesc.setAmountOfOperation(operationDetails.getValue());
+        operationDesc.setActualInitiatorAccountBalance(initiator.getBalance());
+        if (recipient != null) {
+            operationDesc.setActualRecipientAccountBalance(recipient.getBalance());
+        }
+        historyService.saveOperationDesc(operationDesc);
     }
 
 

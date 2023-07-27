@@ -1,9 +1,14 @@
 package com.example.simplebank.service;
 
-import com.example.simplebank.model.OperationLog;
+import com.example.simplebank.model.OperationDesc;
+import org.springframework.http.ResponseEntity;
 
 import java.util.List;
 
 public interface HistoryService {
-    List<OperationLog> findOperationsByAccountId(Long accountId);
+
+    void saveOperationDesc(OperationDesc operationDesc);
+
+    ResponseEntity<List<OperationDesc>> findAllOperationDescByAccountId(Long accountId);
+
 }
